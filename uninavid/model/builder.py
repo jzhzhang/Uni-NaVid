@@ -19,11 +19,16 @@ import shutil
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, BitsAndBytesConfig
 import torch
+from uninavid.device import resolve_device
 from uninavid.model import *
 from uninavid.constants import DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
 
-def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map="auto", device="cuda"):
+def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, load_4bit=False, device_map=None, device=None, dtype=torch.float16):
+    device = resolve_device(device)
+    if device_map is None:
+        # CUDA keeps the original automatic placement; other backends are pinned to the resolved device.
+        device_map = "auto" if device.type == "cuda" else {"": device}
     kwargs = {"device_map": device_map}
 
     if load_8bit:
@@ -37,7 +42,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
             bnb_4bit_quant_type='nf4'
         )
     else:
-        kwargs['torch_dtype'] = torch.float16
+        kwargs['torch_dtype'] = dtype
 
     if 'vid' in model_name.lower():
         # Load LLaMA-VID model
@@ -94,7 +99,7 @@ def load_pretrained_model(model_path, model_base, model_name, load_8bit=False, l
         
         if not vision_tower.is_loaded:
             vision_tower.load_model()
-        vision_tower.to(device=device, dtype=torch.float16)
+        vision_tower.to(device=device, dtype=dtype)
         image_processor = vision_tower.image_processor
                 
         

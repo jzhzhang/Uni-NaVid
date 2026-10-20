@@ -116,6 +116,18 @@ We provide the offline evaluation code of Uni-NaVid on real-world videos, includ
 ```
 python offline_eval_uninavid.py test_cases/vln_1 Ourpur_dir # or test_cases/tracking_1
 ```
+
+### How to run the same on Intel's XPU
+
+Skip the `flash-attn` install step and the pinned `torch==2.0.1`; the inference path uses the default attention of the installed `transformers` and does not need either.
+```
+pip install torch torchvision --index-url https://download.pytorch.org/whl/xpu
+pip install -e . --no-deps
+pip install "transformers==4.35.2" "tokenizers==0.15.2" "timm==0.6.13" accelerate einops sentencepiece opencv-python-headless imageio numpy
+ZE_AFFINITY_MASK=0 python offline_eval_uninavid.py test_cases/vln_1 Ourpur_dir # or test_cases/tracking_1
+```
+The device is detected in the order XPU, CUDA, CPU. To choose it, pass `device=` (and `dtype=`, for example `torch.bfloat16`) to `UniNaVid_Agent`. Only the offline evaluation path is covered; the benchmark evaluation (simulator) is not.
+
 https://github.com/user-attachments/assets/31592c56-8369-4389-994f-f64b151ebb59
 
 (move to the chair, then turn left and move forward to the humanoid robot and stop.)

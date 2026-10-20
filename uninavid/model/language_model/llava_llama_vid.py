@@ -26,6 +26,7 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from uninavid.model.uninavid_arch import UniNaVIDMetaModel, UniNaVIDMetaForCausalLM
 from uninavid.constants import NAVIGATION_IDENTIFIER
+from uninavid.device import empty_cache
 
 import os
 print("Setting WANDB_MODE to offline")
@@ -84,7 +85,7 @@ class LlavaLlamaAttForCausalLM(LlamaForCausalLM, UniNaVIDMetaForCausalLM):
 
         input_ids, attention_mask, past_key_values, inputs_embeds, labels = self.prepare_inputs_labels_for_multimodal(input_ids, attention_mask, past_key_values, labels, images, prompts=prompts)
 
-        torch.cuda.empty_cache()
+        empty_cache(self.device.type)
 
         outputs = self.model(
             input_ids=input_ids,

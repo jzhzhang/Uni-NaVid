@@ -10,6 +10,7 @@ import cv2
 import time
 import argparse
 
+from uninavid.device import manual_seed_all, resolve_device
 from uninavid.mm_utils import get_model_name_from_path
 from uninavid.model.builder import load_pretrained_model
 from uninavid.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
@@ -21,6 +22,7 @@ from uninavid.mm_utils import tokenizer_image_token, KeywordsStoppingCriteria
 
 seed = 30
 torch.manual_seed(seed)
+manual_seed_all(seed)
 np.random.seed(seed)
 
 
@@ -29,14 +31,16 @@ np.random.seed(seed)
 
 
 class UniNaVid_Agent():
-    def __init__(self, model_path):
+    def __init__(self, model_path, device=None, dtype=torch.float16):
         
         print("Initialize UniNaVid")
         
         self.conv_mode = "vicuna_v1"
+        self.device = resolve_device(device)
+        self.dtype = dtype
 
         self.model_name = get_model_name_from_path(model_path)
-        self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(model_path, None, get_model_name_from_path(model_path))
+        self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(model_path, None, get_model_name_from_path(model_path), device=self.device, dtype=dtype)
 
         assert self.image_processor is not None
 
@@ -52,7 +56,7 @@ class UniNaVid_Agent():
         
         batch_image = np.asarray(rgb_list)
         self.model.get_model().new_frames = len(rgb_list)
-        video = self.image_processor.preprocess(batch_image, return_tensors='pt')['pixel_values'].half().cuda()
+        video = self.image_processor.preprocess(batch_image, return_tensors='pt')['pixel_values'].to(dtype=self.dtype, device=self.device)
 
         return [video]
 
@@ -68,12 +72,12 @@ class UniNaVid_Agent():
         IMAGE_END_TOKEN = "</image_special>"
         NAVIGATION_SPECIAL_TOKEN = "[Navigation]"
         IAMGE_SEPARATOR = "<image_sep>"
-        image_start_special_token = self.tokenizer(IMAGE_START_TOKEN, return_tensors="pt").input_ids[0][1:].cuda()
-        image_end_special_token = self.tokenizer(IMAGE_END_TOKEN, return_tensors="pt").input_ids[0][1:].cuda()
-        video_start_special_token = self.tokenizer(VIDEO_START_SPECIAL_TOKEN, return_tensors="pt").input_ids[0][1:].cuda()
-        video_end_special_token = self.tokenizer(VIDEO_END_SPECIAL_TOKEN, return_tensors="pt").input_ids[0][1:].cuda()
-        navigation_special_token = self.tokenizer(NAVIGATION_SPECIAL_TOKEN, return_tensors="pt").input_ids[0][1:].cuda()
-        image_seperator = self.tokenizer(IAMGE_SEPARATOR, return_tensors="pt").input_ids[0][1:].cuda()
+        image_start_special_token = self.tokenizer(IMAGE_START_TOKEN, return_tensors="pt").input_ids[0][1:].to(self.device)
+        image_end_special_token = self.tokenizer(IMAGE_END_TOKEN, return_tensors="pt").input_ids[0][1:].to(self.device)
+        video_start_special_token = self.tokenizer(VIDEO_START_SPECIAL_TOKEN, return_tensors="pt").input_ids[0][1:].to(self.device)
+        video_end_special_token = self.tokenizer(VIDEO_END_SPECIAL_TOKEN, return_tensors="pt").input_ids[0][1:].to(self.device)
+        navigation_special_token = self.tokenizer(NAVIGATION_SPECIAL_TOKEN, return_tensors="pt").input_ids[0][1:].to(self.device)
+        image_seperator = self.tokenizer(IAMGE_SEPARATOR, return_tensors="pt").input_ids[0][1:].to(self.device)
 
         if self.model.config.mm_use_im_start_end:
             qs = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + '\n' + qs.replace('<image>', '')
@@ -85,7 +89,7 @@ class UniNaVid_Agent():
         conv.append_message(conv.roles[1], None)
         prompt = conv.get_prompt()
 
-        token_prompt = tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').cuda()
+        token_prompt = tokenizer_image_token(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').to(self.device)
         indices_to_replace = torch.where(token_prompt == -200)[0]
         new_list = []
         while indices_to_replace.numel() > 0:
